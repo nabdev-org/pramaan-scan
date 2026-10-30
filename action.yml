@@ -1,0 +1,74 @@
+# Pramaan scan. A composite action with no container and no third-party action. It
+# downloads the Pramaan collector from your own Pramaan, checks its sha256 and version,
+# makes a CycloneDX SBOM of `path`, signs it with your upload key and uploads it. With
+# fail_on set, the job fails when Pramaan finds new findings at or above that priority.
+#
+# Every input reaches the script as an environment variable. No `${{ }}` expression is
+# ever written into a `run:` line, so an input such as a branch name cannot run a command.
+name: Pramaan scan
+description: Make an SBOM of your code with the Pramaan collector, upload it signed, and fail on new findings.
+author: NeauraBuild
+branding:
+  icon: shield
+  color: blue
+inputs:
+  api_url:
+    description: The address your Pramaan is served on, such as https://pramaan.example.in
+    required: true
+  tenant:
+    description: Your tenant id. Settings, Collectors in Pramaan shows it.
+    required: true
+  application:
+    description: The application id to upload to
+    required: true
+  release:
+    description: The release label, such as the tag, or the branch and run number
+    required: true
+  key:
+    description: The Ed25519 upload key (PEM), from a secret. Never paste it into the workflow.
+    required: true
+  path:
+    description: The directory or lock file to scan
+    default: "."
+  fail_on:
+    description: P0, P1, P2 or P3 fails the job on new findings at that priority or above. none never fails on findings.
+    default: P1
+  wait:
+    description: Seconds to wait for Pramaan to match the SBOM, when fail_on is not none
+    default: "900"
+  collector_url:
+    description: Only if you host pramaan.pyz yourself (https). Default {api_url}/downloads/collector/pramaan-<collector_version>.pyz
+    default: ""
+  collector_version:
+    description: The collector version to download. The sha256 below belongs to this version.
+    default: "0.29.0"
+  collector_sha256:
+    description: sha256 of that pramaan.pyz. Empty checks it against {api_url}/downloads/collector/SHA256SUMS
+    default: ""
+  ca_bundle:
+    description: Path to a CA bundle (PEM), only if your Pramaan sits behind a private CA
+    default: ""
+outputs:
+  sbom:
+    description: Path of the SBOM file the collector wrote
+    value: ${{ steps.scan.outputs.sbom }}
+runs:
+  using: composite
+  steps:
+    - id: scan
+      shell: bash
+      env:
+        PRAMAAN_API_URL: ${{ inputs.api_url }}
+        PRAMAAN_TENANT: ${{ inputs.tenant }}
+        PRAMAAN_APPLICATION: ${{ inputs.application }}
+        PRAMAAN_RELEASE: ${{ inputs.release }}
+        PRAMAAN_KEY: ${{ inputs.key }}
+        PRAMAAN_PATH: ${{ inputs.path }}
+        PRAMAAN_FAIL_ON: ${{ inputs.fail_on }}
+        PRAMAAN_WAIT: ${{ inputs.wait }}
+        PRAMAAN_COLLECTOR_URL: ${{ inputs.collector_url }}
+        PRAMAAN_COLLECTOR_VERSION: ${{ inputs.collector_version }}
+        PRAMAAN_COLLECTOR_SHA256: ${{ inputs.collector_sha256 }}
+        PRAMAAN_CA_BUNDLE: ${{ inputs.ca_bundle }}
+        PRAMAAN_WORK: ${{ runner.temp }}/pramaan
+      run: bash "$GITHUB_ACTION_PATH/scripts/scan.sh"

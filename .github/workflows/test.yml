@@ -1,0 +1,48 @@
+name: Test
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      # raven-actions/actionlint v2.2.0. It lints the workflow files; action.yml is
+      # checked by the parse below and its script by shellcheck.
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7
+        with:
+          version: 1.7.9
+      - name: Parse action.yml
+        run: |
+          ruby -ryaml -e '
+            a = YAML.load_file("action.yml")
+            %w[name description author branding inputs outputs runs].each { |k| abort "action.yml has no #{k}" unless a[k] }
+            abort "runs.using must be composite" unless a["runs"]["using"] == "composite"
+          '
+      - name: Shellcheck
+        run: shellcheck scripts/scan.sh tests/self-test.sh
+      - name: Compile prepare.py
+        run: python3 -m py_compile scripts/prepare.py
+
+  self-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      # actions/checkout v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+        with:
+          persist-credentials: false
+      # actions/setup-python v6.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
+        with:
+          python-version: "3.12"
+      - name: Self-test with hostile inputs and a fake collector
+        run: bash tests/self-test.sh
