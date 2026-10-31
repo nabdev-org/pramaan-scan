@@ -93,7 +93,13 @@ with open(f"{d}/port", "w") as f:
 s.serve_forever()
 PY
 server_pid=$!
-for _ in $(seq 50); do [ -s port ] && break; sleep 0.1; done
+# A cold macOS runner can take several seconds to start Python with TLS: wait up to 30 s,
+# and stop early with the server's log if the process has died.
+for _ in $(seq 300); do
+  [ -s port ] && break
+  kill -0 "$server_pid" 2>/dev/null || break
+  sleep 0.1
+done
 [ -s port ] || { cat server.log; echo "the test server did not start"; exit 1; }
 api="https://127.0.0.1:$(cat port)"
 
